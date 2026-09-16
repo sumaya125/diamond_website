@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Frames → loupe → app — prototype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Buda:wght@300&display=swap" rel="stylesheet">
+<!--
+  Prototype for sections 2 + 3 as ONE pinned stage.
+  Section 2: frame sequence scrubbed by scroll on a canvas.
+  Hand-over: a 4K still identical to the last frame covers the canvas.
+  Section 3: a loupe (magnified, circle-clipped copy of the still) walks through four steps.
+  Asset paths are set in CONFIG at the top of the script.
+-->
+<style>
+  :root {
+    --black: #000000;
+    --paper: #F2F2F0;
+    --ink: #121212;
+    --mist: #9A9A96;
+    --ash: #4A4A48;
+    color-scheme: dark;
+  }
+  :root:not([data-theme="light"]) { --black: #000000; }
+  :root[data-theme="dark"] { --black: #000000; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: var(--black); color: var(--paper); }
+  body { font-family: "Buda", "Cormorant Garamond", Georgia, serif; font-weight: 300; font-synthesis: none; overflow-x: hidden; }
+
+  /* ---------- stand-in for the hero ---------- */
+  .hero { position: relative; height: 100svh; background: #cfcfcb center / cover no-repeat; color: var(--ink); overflow: hidden; }
+  .hero .l, .hero .r { position: absolute; top: 52%; transform: translateY(-50%); font-size: clamp(2.2rem, 4.2vw, 5rem); line-height: 1; }
+  .hero .l { right: 69%; letter-spacing: .02em; }
+  .hero .r { left: 69%; letter-spacing: .12em; }
+  .hero small { position: absolute; bottom: 4vh; left: 50%; transform: translateX(-50%); font-size: .9rem; letter-spacing: .14em; color: #555; }
+  @media (max-width: 800px), (max-aspect-ratio: 1/1) {
+    .hero .l, .hero .r { left: 0; right: 0; text-align: center; transform: none; font-size: clamp(2rem, 9vw, 3rem); }
+    .hero .l { top: 9svh; } .hero .r { top: calc(9svh + 1.2em); }
+  }
+
+  /* ---------- pinned stage ---------- */
+  .track { position: relative; }            /* height is set from CONFIG in JS */
+  .stage { position: sticky; top: 0; height: 100svh; overflow: hidden; background: var(--black); }
+
+  .view { position: absolute; left: 0; right: 0; top: 0; height: var(--vh, 100svh); overflow: hidden; }
+  canvas, .layer { position: absolute; inset: 0; width: 100%; height: 100%; }
+  canvas { display: block; }
+  .layer { background-size: cover; background-position: center; background-repeat: no-repeat; }
+  .still { opacity: var(--still-o, 0); }
+  .zoom { clip-path: circle(0px at 50% 50%); opacity: var(--lens-o, 0); background-size: 0 0; background-position: 0 0; overflow: hidden; }
+  .detail {
+    position: absolute; background: center / 100% 100% no-repeat;
+    /* soft 6% fade on every edge, so plates blend into each other and into the still */
+    -webkit-mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent), linear-gradient(180deg, transparent, #000 6%, #000 94%, transparent);
+    -webkit-mask-composite: source-in;
+            mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent), linear-gradient(180deg, transparent, #000 6%, #000 94%, transparent);
+            mask-composite: intersect;
+  }
+  .dim {
+    position: absolute; inset: 0; pointer-events: none; opacity: var(--lens-o, 0);
+    background: radial-gradient(circle at var(--x, 50%) var(--y, 50%),
+      transparent calc(var(--r, 0px) - 1px), rgba(0,0,0,.58) calc(var(--r, 0px) + 60px));
+  }
+  .ring {
+    position: absolute; left: 50%; top: 50%; width: 0; height: 0;
+    transform: translate(-50%, -50%); border-radius: 50%;
+    border: 1px solid rgba(242,242,240,.85); opacity: var(--lens-o, 0);
+    box-shadow: 0 0 0 10px rgba(242,242,240,.06), 0 0 0 11px rgba(242,242,240,.25), inset 0 0 40px rgba(0,0,0,.35);
+    pointer-events: none;
+  }
+  .ring::before, .ring::after { content: ""; position: absolute; left: 50%; width: 1px; height: 12px; background: rgba(242,242,240,.7); }
+  .ring::before { top: -22px; } .ring::after { bottom: -22px; }
+
+  .fade { position: absolute; inset: auto 0 0 0; height: 25%; background: linear-gradient(transparent, rgba(0,0,0,.6)); pointer-events: none; opacity: var(--tag-o, 0); }
+  .tagline {
+    position: absolute; left: 0; right: 0; top: 88svh;
+    text-align: center; font-size: clamp(1.75rem, 3.2vw, 3.75rem); letter-spacing: .12em; line-height: 1.15;
+    padding: 0 6vw; pointer-events: none;
+    opacity: var(--tag-o, 0); transform: translateY(calc(-50% + (1 - var(--tag-o, 0)) * 12px));
+  }
+
+  .copy { position: absolute; left: 6vw; top: 50%; transform: translateY(-50%); width: min(27vw, 420px); opacity: calc(var(--copy-o, 0) * var(--copy-o-mult, 1)); z-index: 2; }
+  .count { font-size: .95rem; letter-spacing: .12em; color: var(--mist); margin-bottom: 1.4rem; font-variant-numeric: tabular-nums; }
+  .count b { font-weight: 300; color: var(--paper); }
+  .q { font-weight: 300; font-size: clamp(2rem, 3.6vw, 3.6rem); line-height: 1.08; letter-spacing: .02em; min-height: 2.3em; }
+  .a { margin-top: 1.4rem; font-size: clamp(1rem, 1.25vw, 1.2rem); line-height: 1.7; color: var(--mist); max-width: 34ch; }
+  .swap { transition: opacity .45s ease, transform .45s ease; }
+  .swap.out { opacity: 0; transform: translateY(8px); }
+  .rail { position: absolute; right: 5vw; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 1.1rem; list-style: none; opacity: calc(var(--copy-o, 0) * var(--copy-o-mult, 1)); z-index: 2; }
+  .rail li { font-size: .95rem; letter-spacing: .1em; color: var(--ash); transition: color .4s ease; text-align: right; }
+  .rail li.on { color: var(--paper); }
+
+
+  /* ---------- section 4 inside the same stage ---------- */
+  .ring { z-index: 5; }
+  .ring.flying { border-width: 1.5px; box-shadow: 0 0 0 1px rgba(18,18,18,.55); }
+  .s4 {
+    position: absolute; inset: 0; z-index: 3; opacity: var(--s4-o, 0); pointer-events: none;
+    background:
+      radial-gradient(120% 90% at 30% 55%, rgba(255,255,255,.10), transparent 60%),
+      linear-gradient(90deg, #969693, #CFCFCC 70%);
+    color: #121212;
+    display: grid; grid-template-columns: minmax(0, 44%) 1fr; align-items: center;
+  }
+  .s4.live { pointer-events: auto; }
+  .s4 .hand {
+    position: relative; align-self: end; height: 108svh; aspect-ratio: 2 / 3;
+    margin-left: -2vw; margin-bottom: -2svh;
+    transform: translate(var(--hx, 0px), var(--hy, 0px));
+  }
+  .s4 .hand img { position: absolute; inset: 0; width: 100%; height: 100%; }   /* transparent cut-out */
+  .screen {
+    position: absolute; left: 39.5%; top: 11.4%; width: 35.4%; height: 50.1%;
+    border-radius: 11% / 5.2%; overflow: hidden; background: #000; color: #F2F2F0;
+    container-type: inline-size; transform: rotate(-0.25deg);
+  }
+  .ui { position: absolute; inset: 0; display: flex; flex-direction: column; padding: 16cqw 7cqw 7cqw; font-size: 4.2cqw; }
+  .ui-top { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 5cqw; opacity: var(--ui-o, 0); }
+  .ui-top h3 { font-weight: 300; font-size: 7.4cqw; letter-spacing: .02em; }
+  .ui-top span { color: #9A9A96; font-size: 3.6cqw; letter-spacing: .08em; }
+  .shot { position: relative; aspect-ratio: 1; border-radius: 4cqw; overflow: hidden; background: #000; }
+  .shot-img { position: absolute; inset: 0; background: center / cover no-repeat; opacity: var(--shot-o, 0); }
+  .shot .target {
+    position: absolute; left: 50%; top: 58%; width: 42%; aspect-ratio: 1; transform: translate(-50%, -50%);
+    border-radius: 50%; border: 1px solid rgba(242,242,240,.85); box-shadow: 0 0 0 1.6cqw rgba(242,242,240,.07);
+    opacity: 0;
+  }
+  .shot .target.on { opacity: 1; animation: breathe 3.6s ease-in-out infinite; }
+  @keyframes breathe { 50% { transform: translate(-50%, -50%) scale(1.06); } }
+  .grades { list-style: none; margin-top: 5cqw; display: grid; grid-template-columns: 1fr 1fr; gap: 3.4cqw 4cqw; opacity: var(--ui-o, 0); }
+  .grades li { border-top: 1px solid rgba(242,242,240,.16); padding-top: 2.4cqw; }
+  .grades small { display: block; color: #9A9A96; font-size: 3.3cqw; letter-spacing: .06em; }
+  .grades b { font-weight: 300; font-size: 5.6cqw; }
+  .verdict { margin-top: auto; padding: 4.4cqw; border-radius: 4cqw; background: rgba(242,242,240,.08); opacity: var(--ui-o, 0); }
+  .verdict small { color: #9A9A96; font-size: 3.3cqw; letter-spacing: .06em; }
+  .verdict p { font-size: 5cqw; line-height: 1.3; margin-top: 1.4cqw; }
+  .meter { position: relative; height: 1.2cqw; border-radius: 1cqw; margin-top: 3.6cqw; background: linear-gradient(90deg, rgba(242,242,240,.25), rgba(242,242,240,.9)); }
+  .meter i { position: absolute; top: 50%; left: 68%; width: 3.6cqw; height: 3.6cqw; border-radius: 50%; background: #F2F2F0; transform: translate(-50%, -50%); box-shadow: 0 0 0 1cqw rgba(0,0,0,.6); }
+  .meter-labels { display: flex; justify-content: space-between; margin-top: 2cqw; color: #9A9A96; font-size: 3cqw; }
+  .s4-copy { padding: 0 8vw 0 0; max-width: 40rem; opacity: var(--s4c-o, 0); transform: translateY(calc((1 - var(--s4c-o, 0)) * 16px)); }
+  .s4-copy h2 { font-weight: 300; font-size: clamp(2.4rem, 4.4vw, 5rem); line-height: 1.05; letter-spacing: .02em; text-wrap: balance; }
+  .s4-copy p { margin-top: 1.6rem; font-size: clamp(1.05rem, 1.35vw, 1.3rem); line-height: 1.7; color: #3E3E3C; max-width: 34ch; }
+  .stores { display: flex; flex-wrap: wrap; gap: .8rem; margin-top: 2.4rem; }
+  .stores a { display: inline-flex; flex-direction: column; justify-content: center; min-width: 11.5rem; padding: .7rem 1.3rem; border-radius: 999px; background: #121212; color: #F2F2F0; text-decoration: none; }
+  .stores a small { font-size: .75rem; letter-spacing: .06em; color: #9A9A96; }
+  .stores a span { font-size: 1.15rem; letter-spacing: .03em; }
+  .stores a:hover { background: #2A2A28; }
+  .stores a:focus-visible { outline: 2px solid #121212; outline-offset: 3px; }
+  @media (max-width: 800px), (max-aspect-ratio: 1/1) {
+    .s4 { display: block; }
+    .s4-copy { position: absolute; top: 7svh; left: 7vw; right: 7vw; padding: 0; text-align: center; margin: 0 auto; }
+    .s4-copy h2 { font-size: clamp(2rem, 9vw, 2.6rem); }
+    .s4-copy p { margin: 1rem auto 0; font-size: 1rem; }
+    .stores { justify-content: center; margin-top: 1.4rem; }
+    .stores a { min-width: 9.5rem; padding: .55rem 1rem; }
+    .s4 .hand { position: absolute; left: -10vw; bottom: -3svh; height: 62svh; margin: 0; }
+  }
+
+  .loading { position: absolute; bottom: 4vh; left: 50%; transform: translateX(-50%); font-size: .85rem; letter-spacing: .14em; color: var(--ash); transition: opacity .4s; }
+
+  .outro { min-height: 100svh; display: grid; place-items: center; text-align: center; padding: 8vh 6vw; }
+  .outro h2 { font-weight: 300; font-size: clamp(2.2rem, 5vw, 4.5rem); letter-spacing: .06em; line-height: 1.1; margin-bottom: 1.2rem; }
+  .outro p { font-size: clamp(1.1rem, 2vw, 1.5rem); color: var(--mist); letter-spacing: .04em; max-width: 34ch; line-height: 1.6; margin: 0 auto; }
+
+  /* reduced motion: static layout */
+  .static { display: none; }
+
+  @media (max-width: 800px), (max-aspect-ratio: 1/1) {
+    .copy { left: 6vw; right: 6vw; width: auto; top: 61svh; transform: none; }
+    .q { min-height: 0; font-size: clamp(1.7rem, 7.5vw, 2.4rem); }
+    .a { font-size: 1rem; }
+    .count { margin-bottom: .8rem; }
+    .rail { display: none; }
+    .tagline { top: 86svh; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .track { display: none; }
+    .static { display: block; }
+    .static .pic { aspect-ratio: 16 / 9; background-size: cover; background-position: center; }
+    .static .tag { text-align: center; font-size: clamp(1.5rem, 3vw, 3rem); letter-spacing: .12em; padding: 4vh 6vw 8vh; }
+    .static ol { list-style: none; max-width: 40rem; margin: 0 auto; padding: 0 6vw 10vh; display: grid; gap: 3rem; }
+    .static h3 { font-weight: 300; font-size: clamp(1.6rem, 3vw, 2.4rem); margin-bottom: .6rem; }
+    .static p { color: var(--mist); line-height: 1.7; }
+  }
+</style>
+</head>
+<body>
+
+<section class="hero" id="hero" aria-label="Hero (stand-in)">
+  <span class="l" aria-hidden="true">From wearing</span>
+  <span class="r" aria-hidden="true">a diamond</span>
+  <small>Hero stand-in · scroll down</small>
+</section>
+
+<section class="track" id="track" aria-label="From the reveal to four questions to ask a diamond">
+  <div class="stage" id="stage">
+    <div class="view" id="view">
+      <canvas id="canvas" aria-hidden="true"></canvas>
+      <div class="layer still" id="still" aria-hidden="true"></div>
+      <div class="dim" aria-hidden="true"></div>
+      <div class="layer zoom" id="zoom" aria-hidden="true"></div>
+      <div class="fade" aria-hidden="true"></div>
+    </div>
+
+    <p class="tagline">— to understanding it.</p>
+
+    <div class="copy" aria-live="polite">
+      <p class="count swap" id="count"><b>1</b> of 4</p>
+      <h2 class="q swap" id="q"></h2>
+      <p class="a swap" id="a"></p>
+    </div>
+    <ol class="rail" id="rail" aria-hidden="true"></ol>
+    <div class="s4" id="s4" aria-labelledby="app-title">
+      <div class="hand" id="hand">
+        <img src="/images/hand_cutout.webp" alt="" aria-hidden="true">
+        <div class="screen" role="img" aria-label="The app showing a diamond check: cut excellent, color G, clarity VS1, 1.02 carats, priced slightly above similar stones">
+          <div class="ui" aria-hidden="true">
+            <div class="ui-top"><h3>Stone check</h3><span>Report 0417</span></div>
+            <div class="shot" id="shot"><div class="shot-img" style="background-image:url('/images/app_shot_pendant.jpg')"></div><div class="target" id="target"></div></div>
+            <ul class="grades">
+              <li><small>Cut</small><b>Excellent</b></li>
+              <li><small>Color</small><b>G</b></li>
+              <li><small>Clarity</small><b>VS1</b></li>
+              <li><small>Carat</small><b>1.02</b></li>
+            </ul>
+            <div class="verdict">
+              <small>Price check</small>
+              <p>8% above similar certified stones</p>
+              <div class="meter"><i></i></div>
+              <div class="meter-labels"><span>Fair</span><span>High</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="s4-copy">
+        <h2 id="app-title">Now you understand it.<br>Buy it right.</h2>
+        <p>Check any stone before you pay: its grades, its certificate, and what similar diamonds really sell for.</p>
+        <div class="stores">
+          <a href="#" aria-label="Download on the App Store"><small>Download on the</small><span>App Store</span></a>
+          <a href="#" aria-label="Get it on Google Play"><small>Get it on</small><span>Google Play</span></a>
+        </div>
+      </div>
+    </div>
+    <div class="ring" id="ring" aria-hidden="true"></div>
+    <p class="loading" id="loading">Loading</p>
+  </div>
+</section>
+
+<section class="static" id="static" aria-label="Four questions to ask a diamond">
+  <div class="pic" id="staticPic" role="img" aria-label="A diamond necklace on a black velvet bust under a single spotlight"></div>
+  <p class="tag">— to understanding it.</p>
+  <ol id="staticList"></ol>
+</section>
+
+<section class="outro">
+  <div>
+    <h2>Next section</h2>
+    <p>The stage un-pins here.</p>
+  </div>
+</section>
+
+<script>
+/* ======================== CONFIG ======================== */
+const CONFIG = {
+  // Asset paths (in the real project these live under /public)
+  frameCount: 54,
+  frameUrl: i => `/frames/necklace/frame_${String(i).padStart(3, "0")}.webp`,
+  stillUrl: "/images/necklace_still_4k.jpg",
+  heroUrl: null,                         // prototype only
+  stillSize: { w: 3840, h: 2160 },
+  // High-resolution plate of the necklace area, shown only inside the lens.
+  // x / y / w / h are the plate's rectangle as fractions of the 4K still.
+  // High-resolution plates shown only inside the lens, drawn in order (later = on top).
+  // x / y / w / h are each plate's rectangle as fractions of the 4K still.
+  plates: [
+    { url: "/images/necHD3.jpeg", x: 0.390625, y: 0.324074, w: 0.218750, h: 0.481481 },  // whole necklace (Carat)
+    { url: "/images/necHD1.jpeg", x: 0.440104, y: 0.539352, w: 0.115885, h: 0.217593 },  // pendant (Cut, Clarity)
+    { url: "/images/necHD2.jpeg", x: 0.414063, y: 0.421296, w: 0.088542, h: 0.157407 },  // chain (Color)
+  ],
+
+  // Frame ranges inside the sequence
+  lightOnFrames: [0, 19],
+  pushInFrames: [20, 53],
+
+  // Scroll segments, in viewport heights
+  segments: {
+    LIGHT_ON: 1.0,
+    PUSH_IN: 1.0,
+    TAGLINE: 0.6,
+    HANDOVER: 0.5,
+    LENS_OPEN: 0.5,
+    STEPS: 4.0,
+    FLY: 1.3,            // lens leaves the necklace and settles inside the phone
+    SETTLE: 0.6,         // app screen fills in, copy + buttons appear
+  },
+  stepHold: 0.62,        // share of each step spent standing still
+  smoothing: 0.14,       // scroll lerp factor
+  mobileAreaVh: 60,      // picture height after hand-over on narrow screens
+};
+
+const STEPS = [
+  { key: "Cut",     x: 0.498, y: 0.640, z: 2.6, r: 0.17, q: "What’s your cut?",
+    a: "Cut decides how light travels through the stone. A well cut diamond sends light back as brilliance; a poor one looks glassy, whatever its size." },
+  { key: "Clarity", x: 0.498, y: 0.685, z: 3.4, r: 0.15, q: "How clear are you?",
+    a: "Clarity grades the tiny marks inside the stone. Most are invisible without magnification, so paying for flawless often buys nothing you can see." },
+  { key: "Color",   x: 0.458, y: 0.500, z: 3.0, r: 0.15, q: "What color are you, really?",
+    a: "Color runs from D, completely colorless, to Z, a faint yellow. Set in white metal, a G or H often looks just as white for far less." },
+  { key: "Carat",   x: 0.498, y: 0.615, z: 1.7, r: 0.20, q: "How much do you weigh?",
+    a: "Carat is weight, not size. A stone just under a round number, 0.9 instead of 1.0, can look almost identical and cost noticeably less." },
+];
+/* ======================================================== */
+
+const $ = id => document.getElementById(id);
+const track = $("track"), stage = $("stage"), view = $("view"), canvas = $("canvas");
+const stillEl = $("still"), zoom = $("zoom");
+const qEl = $("q"), aEl = $("a"), cEl = $("count"), rail = $("rail"), loadingEl = $("loading");
+const ctx = canvas.getContext("2d");
+const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const isNarrow = () => matchMedia("(max-width: 800px), (max-aspect-ratio: 1/1)").matches;
+
+const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+const lerp = (a, b, t) => a + (b - a) * t;
+const ease = t => t < .5 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3) / 2;
+const span = (p, a, b) => clamp((p - a) / (b - a));
+
+if (CONFIG.heroUrl) $("hero").style.backgroundImage = `url("${CONFIG.heroUrl}")`;
+stillEl.style.backgroundImage = zoom.style.backgroundImage = `url("${CONFIG.stillUrl}")`;
+const plateEls = (CONFIG.plates || []).map(p => {
+  const el = document.createElement("div");
+  el.className = "detail";
+  el.style.backgroundImage = `url("${p.url}")`;
+  zoom.appendChild(el);
+  return el;
+});
+// Draw the still and the plates at their magnified size around the lens centre (cx, cy).
+// No CSS transform is used, so the browser rasterises the images at full resolution.
+function drawZoom(cx, cy, z) {
+  const W = view.clientWidth, H = view.clientHeight, { w: IW, h: IH } = CONFIG.stillSize;
+  const s = Math.max(W / IW, H / IH), dw = IW * s, dh = IH * s, ox = (W - dw) / 2, oy = (H - dh) / 2;
+  const zw = dw * z, zh = dh * z, zx = cx + (ox - cx) * z, zy = cy + (oy - cy) * z;
+  zoom.style.backgroundSize = `${zw}px ${zh}px`;
+  zoom.style.backgroundPosition = `${zx}px ${zy}px`;
+  (CONFIG.plates || []).forEach((p, k) => {
+    const el = plateEls[k];
+    el.style.left = (zx + p.x * zw) + "px";
+    el.style.top = (zy + p.y * zh) + "px";
+    el.style.width = (p.w * zw) + "px";
+    el.style.height = (p.h * zh) + "px";
+  });
+}
+$("staticPic").style.backgroundImage = `url("${CONFIG.stillUrl}")`;
+$("staticList").innerHTML = STEPS.map(s => `<li><h3>${s.q}</h3><p>${s.a}</p></li>`).join("");
+rail.innerHTML = STEPS.map(s => `<li>${s.key}</li>`).join("");
+const railItems = [...rail.children];
+
+/* ----- scroll map: segment boundaries as fractions of the pinned distance ----- */
+const SEG = CONFIG.segments;
+const totalVh = Object.values(SEG).reduce((a, b) => a + b, 0);
+track.style.height = `${(totalVh + 1) * 100}svh`;
+const bounds = {};
+{ let acc = 0; for (const [k, v] of Object.entries(SEG)) { bounds[k] = [acc / totalVh, (acc + v) / totalVh]; acc += v; } }
+
+/* ----- frames ----- */
+const frames = new Array(CONFIG.frameCount);
+let framesReady = 0, stillReady = false;
+function loadImage(src) {
+  return new Promise(res => {
+    const img = new Image();
+    img.onload = () => (img.decode ? img.decode().catch(() => {}) : Promise.resolve()).then(() => res(img));
+    img.onerror = () => res(null);
+    img.src = src;
+  });
+}
+if (!reduce) {
+  for (let i = 0; i < CONFIG.frameCount; i++) {
+    loadImage(CONFIG.frameUrl(i)).then(img => {
+      frames[i] = img; framesReady++;
+      if (framesReady === CONFIG.frameCount) { loadingEl.style.opacity = 0; lastDrawn = -1; render(current); }
+    });
+  }
+  loadImage(CONFIG.stillUrl).then(() => { stillReady = true; });
+}
+
+let lastDrawn = -1, lastSize = "";
+function sizeCanvas() {
+  const dpr = Math.min(devicePixelRatio || 1, 2);
+  const w = Math.round(view.clientWidth * dpr), h = Math.round(view.clientHeight * dpr);
+  const key = w + "x" + h;
+  if (key !== lastSize) { canvas.width = w; canvas.height = h; lastSize = key; lastDrawn = -1; }
+}
+function drawFrame(i) {
+  sizeCanvas();
+  if (i === lastDrawn) return;
+  const img = frames[i];
+  ctx.fillStyle = "#000"; ctx.fillRect(0, 0, canvas.width, canvas.height);
+  if (!img) return;                               // still loading: stay black
+  const s = Math.max(canvas.width / img.naturalWidth, canvas.height / img.naturalHeight);
+  const w = img.naturalWidth * s, h = img.naturalHeight * s;
+  ctx.drawImage(img, (canvas.width - w) / 2, (canvas.height - h) / 2, w, h);
+  lastDrawn = i;
+}
+function frameAt(p) {
+  const [a0, a1] = bounds.LIGHT_ON, [b0, b1] = bounds.PUSH_IN;
+  const [f0, f1] = CONFIG.lightOnFrames, [g0, g1] = CONFIG.pushInFrames;
+  if (p <= a1) return Math.round(lerp(f0, f1, span(p, a0, a1)));
+  return Math.round(lerp(g0, g1, span(p, b0, b1)));
+}
+
+/* ----- lens ----- */
+function toScreen(px, py) {
+  const W = view.clientWidth, H = view.clientHeight, { w: IW, h: IH } = CONFIG.stillSize;
+  const s = Math.max(W / IW, H / IH), dw = IW * s, dh = IH * s;
+  return { x: (W - dw) / 2 + px * dw, y: (H - dh) / 2 + py * dh };
+}
+function lensAt(p) {
+  const [o0, o1] = bounds.LENS_OPEN, [s0, s1] = bounds.STEPS;
+  if (p < s0) {
+    const t = ease(span(p, o0, o1));
+    return { ...STEPS[0], r: STEPS[0].r * t, z: lerp(1, STEPS[0].z, t), idx: 0 };
+  }
+  const u = span(p, s0, s1) * STEPS.length;
+  const i = Math.min(STEPS.length - 1, Math.floor(u)), f = u - i, H = CONFIG.stepHold;
+  if (i === STEPS.length - 1 || f < H) return { ...STEPS[i], idx: i };
+  const t = ease((f - H) / (1 - H)), A = STEPS[i], B = STEPS[i + 1];
+  return { x: lerp(A.x, B.x, t), y: lerp(A.y, B.y, t), z: lerp(A.z, B.z, t), r: lerp(A.r, B.r, t), idx: t < .5 ? i : i + 1 };
+}
+
+let shown = -1;
+function setText(i) {
+  if (i === shown) return;
+  const s = STEPS[i], els = [cEl, qEl, aEl];
+  railItems.forEach((li, k) => li.classList.toggle("on", k === i));
+  const apply = () => { cEl.innerHTML = `<b>${i + 1}</b> of ${STEPS.length}`; qEl.textContent = s.q; aEl.textContent = s.a; };
+  if (shown === -1) apply();
+  else { els.forEach(e => e.classList.add("out")); setTimeout(() => { apply(); els.forEach(e => e.classList.remove("out")); }, 280); }
+  shown = i;
+}
+
+
+/* ----- section 4: the lens flies into the phone ----- */
+const s4 = $("s4"), hand = $("hand"), ring = $("ring"), lensTarget = $("target");
+const HAND_FROM = { x: -0.18, y: 0.35 };   // hand enters from bottom-left (fractions of viewport)
+function flyLens(p, lx, ly, lr) {
+  const [f0, f1] = bounds.FLY, [g0, g1] = bounds.SETTLE;
+  const fly = span(p, f0, f1);
+  const bg = ease(span(p, f0, lerp(f0, f1, .55)));          // black → grey, section 3 copy out
+  const move = ease(span(p, lerp(f0, f1, .15), f1));         // lens travel
+  const handIn = ease(span(p, f0, lerp(f0, f1, .8)));        // hand slides in
+  const settle = ease(span(p, g0, g1));
+
+  stage.style.setProperty("--s4-o", bg);
+  s4.classList.toggle("live", bg > .99);
+  view.style.opacity = 1 - bg;
+  stage.style.setProperty("--copy-o-mult", 1 - bg);
+  hand.style.setProperty("--hx", ((1 - handIn) * HAND_FROM.x * innerWidth) + "px");
+  hand.style.setProperty("--hy", ((1 - handIn) * HAND_FROM.y * innerHeight) + "px");
+
+  // where the ring must end up (it moves with the hand, so the lens chases it)
+  const sr = stage.getBoundingClientRect(), tr = lensTarget.getBoundingClientRect();
+  const tx = tr.left - sr.left + tr.width / 2, ty = tr.top - sr.top + tr.height / 2, trad = tr.width / 2;
+
+  const x = lerp(lx, tx, move), y = lerp(ly, ty, move), r = lerp(lr, trad, move);
+  ring.style.left = x + "px"; ring.style.top = y + "px";
+  ring.style.width = ring.style.height = (2 * r) + "px";
+  ring.classList.toggle("flying", fly > 0 && fly < 1);
+
+  const arrived = fly >= 1;
+  ring.style.visibility = arrived ? "hidden" : "visible";
+  lensTarget.classList.toggle("on", arrived);
+  stage.style.setProperty("--shot-o", ease(span(p, lerp(f0, f1, .7), f1)));
+  stage.style.setProperty("--ui-o", settle);
+  stage.style.setProperty("--s4c-o", ease(span(p, lerp(f0, f1, .6), g1)));
+}
+
+/* ----- render everything from one progress value ----- */
+function render(p) {
+  // picture area (mobile shrinks during the hand-over)
+  const hand = ease(span(p, ...bounds.HANDOVER));
+  view.style.setProperty("--vh", (isNarrow() ? lerp(100, CONFIG.mobileAreaVh, hand) : 100) + "svh");
+
+  // section 2: frames
+  const pastFrames = p >= bounds.HANDOVER[0] && stillReady;
+  stage.style.setProperty("--still-o", pastFrames ? 1 : 0);
+  if (!pastFrames || hand < 1) { canvas.style.visibility = "visible"; drawFrame(frameAt(p)); }
+  else canvas.style.visibility = "hidden";
+
+  // tagline: in during the first third of TAGLINE, out during HANDOVER
+  const [t0, t1] = bounds.TAGLINE;
+  const tagIn = ease(span(p, t0, t0 + (t1 - t0) / 3));
+  stage.style.setProperty("--tag-o", tagIn * (1 - hand));
+
+  // section 3: lens + copy
+  const open = span(p, ...bounds.LENS_OPEN);
+  stage.style.setProperty("--lens-o", open > 0 ? 1 : 0);
+  stage.style.setProperty("--copy-o", ease(span(p, lerp(...bounds.LENS_OPEN, .3), bounds.LENS_OPEN[1])));
+
+  const st = lensAt(p), pt = toScreen(st.x, st.y);
+  const r = st.r * Math.min(view.clientWidth, view.clientHeight) * 1.35;
+  view.style.setProperty("--x", pt.x + "px");
+  view.style.setProperty("--y", pt.y + "px");
+  view.style.setProperty("--r", r + "px");
+  flyLens(p, pt.x, pt.y, r);
+  drawZoom(pt.x, pt.y, st.z);
+  zoom.style.clipPath = `circle(${r}px at ${pt.x}px ${pt.y}px)`;
+  setText(st.idx);
+}
+
+function progress() {
+  const rect = track.getBoundingClientRect();
+  return clamp(-rect.top / (track.offsetHeight - innerHeight));
+}
+let target = 0, current = 0, raf = null;
+function tick() {
+  current += (target - current) * CONFIG.smoothing;
+  if (Math.abs(target - current) < 0.0004) current = target;
+  render(current);
+  raf = current !== target ? requestAnimationFrame(tick) : null;
+}
+function onScroll() { target = progress(); if (!raf) raf = requestAnimationFrame(tick); }
+
+if (!reduce) {
+  addEventListener("scroll", onScroll, { passive: true });
+  addEventListener("resize", () => { lastDrawn = -1; render(current); });
+  target = current = progress();
+  render(current);
+}
+</script>
+</body>
+</html>
