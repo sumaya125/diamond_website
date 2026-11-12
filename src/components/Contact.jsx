@@ -2,7 +2,7 @@
 
 // ── Copy ────────────────────────────────────────────────────────────────
 // One entry per locale, so an Arabic (RTL) version is just another key.
-// TODO: swap the placeholder address, number and handle for the real ones.
+// Real contact: Dr. Ammar Al-Kafaji. Add WhatsApp/Instagram only once he gives real ones.
 const CONTACT = {
   en: {
     dir: "ltr",
@@ -12,29 +12,25 @@ const CONTACT = {
     methods: [
       {
         label: "Email",
-        value: "hello@maison.example",
-        href: "mailto:hello@maison.example",
-      },
-      {
-        label: "WhatsApp",
-        value: "+971 00 000 0000",
-        href: "https://wa.me/97100000000",
-      },
-      {
-        label: "Instagram",
-        value: "@maison",
-        href: "https://instagram.com/maison",
+        value: "ammar.alkafaji@gmail.com",
+        href: "mailto:ammar.alkafaji@gmail.com",
       },
     ],
-    note: "Sunday to Thursday, 10:00 – 18:00 GST",
+    note: "Sunday to Thursday, 10:00 – 18:00 Baghdad time",
   },
   ar: {
     dir: "rtl",
-    label: "", // TODO: النسخة العربية
-    heading: "",
-    body: "",
-    methods: [],
-    note: "",
+    label: "تواصل معنا",
+    heading: "ما زلت متردداً؟ تحدّث إلينا.",
+    body: "أرسل لنا الحجر أو الشهادة أو عرض السعر الذي وصلك، ويرد عليك خبير أحجار كريمة خلال يوم عمل واحد.",
+    methods: [
+      {
+        label: "البريد الإلكتروني",
+        value: "ammar.alkafaji@gmail.com",
+        href: "mailto:ammar.alkafaji@gmail.com",
+      },
+    ],
+    note: "من الأحد إلى الخميس، 10:00 – 18:00 بتوقيت بغداد",
   },
 };
 
@@ -59,7 +55,9 @@ export default function Contact({ locale = "en" }) {
           {copy.methods.map((m) => (
             <li key={m.label}>
               <small>{m.label}</small>
-              <a href={m.href}>{m.value}</a>
+              <a href={m.href} dir="ltr">
+                {m.value}
+              </a>
             </li>
           ))}
         </ul>

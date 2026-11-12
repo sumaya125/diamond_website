@@ -96,6 +96,11 @@ const STEPS = [
       q: "What’s your cut?",
       a: "Cut decides how light travels through the stone. A well cut diamond sends light back as brilliance; a poor one looks glassy, whatever its size.",
     },
+    ar: {
+      name: "القطع",
+      q: "ما جودة قطعك؟",
+      a: "القطع يحدد كيف يسري الضوء داخل الحجر. الألماسة المقطوعة جيداً تعيد الضوء بريقاً، والرديئة تبدو كالزجاج مهما كان حجمها.",
+    },
   },
   {
     key: "clarity",
@@ -107,6 +112,11 @@ const STEPS = [
       name: "Clarity",
       q: "How clear are you?",
       a: "Clarity grades the tiny marks inside the stone. Most are invisible without magnification, so paying for flawless often buys nothing you can see.",
+    },
+    ar: {
+      name: "النقاء",
+      q: "ما درجة نقائك؟",
+      a: "النقاء يقيس العلامات الدقيقة داخل الحجر. معظمها لا يُرى إلا بالتكبير، فدفع ثمن «الخالي من العيوب» كثيراً ما يشتري شيئاً لن تراه.",
     },
   },
   {
@@ -120,6 +130,11 @@ const STEPS = [
       q: "What color are you, really?",
       a: "Color runs from D, completely colorless, to Z, a faint yellow. Set in white metal, a G or H often looks just as white for far less.",
     },
+    ar: {
+      name: "اللون",
+      q: "ما لونك الحقيقي؟",
+      a: "يتدرج اللون من D عديم اللون تماماً إلى Z المائل قليلاً إلى الصفرة. في المعدن الأبيض، يبدو G أو H أبيض بالقدر نفسه بسعر أقل بكثير.",
+    },
   },
   {
     key: "carat",
@@ -131,6 +146,11 @@ const STEPS = [
       name: "Carat",
       q: "How much do you weigh?",
       a: "Carat is weight, not size. A stone just under a round number, 0.9 instead of 1.0, can look almost identical and cost noticeably less.",
+    },
+    ar: {
+      name: "القيراط",
+      q: "كم تزن؟",
+      a: "القيراط وزن لا حجم. حجر أقل بقليل من الرقم المدوّر، 0.9 بدل 1.0، قد يبدو مطابقاً تقريباً ويكلّف أقل بشكل ملحوظ.",
     },
   },
 ];
@@ -175,6 +195,33 @@ const COPY = {
       stores: [
         { small: "Download on the", name: "App Store", href: "#", label: "Download on the App Store" },
         { small: "Get it on", name: "Google Play", href: "#", label: "Get it on Google Play" },
+      ],
+    },
+  },
+  ar: {
+    dir: "rtl",
+    stageLabel: "من كشف القطعة إلى أربعة أسئلة تطرحها على الألماسة، ثم التطبيق",
+    revealLabel: "العقد، مكشوفاً",
+    taglinePrefix: "— ",
+    sceneAlt: "عقد ألماس على مجسّم مخملي أسود تحت بقعة ضوء واحدة",
+    stepsLabel: "أربعة أسئلة تطرحها على الألماسة",
+    stepCount: (n, total) => [String(n), ` من ${total}`],
+    loading: "جارٍ التحميل",
+    app: {
+      screenAlt:
+        "التطبيق يفحص ألماسة: قطع ممتاز، لون G، نقاء VS1، وزن 1.02 قيراط، وسعرها أعلى بـ8% من أحجار مشابهة معتمدة",
+      title: "فحص الحجر",
+      report: (id) => `تقرير ${id}`,
+      grades: { cut: "القطع", color: "اللون", clarity: "النقاء", carat: "القيراط" },
+      priceLabel: "فحص السعر",
+      price: (pct) => `أعلى بـ${pct}% من أحجار مشابهة معتمدة`,
+      meterLow: "عادل",
+      meterHigh: "مرتفع",
+      headline: ["الآن فهمتها.", "اشترِها بالشكل الصحيح."],
+      body: "افحص أي حجر قبل أن تدفع: درجاته، وشهادته، وبكم تُباع الألماسات المشابهة فعلاً.",
+      stores: [
+        { small: "حمّله من", name: "App Store", href: "#", label: "حمّله من App Store" },
+        { small: "احصل عليه من", name: "Google Play", href: "#", label: "احصل عليه من Google Play" },
       ],
     },
   },

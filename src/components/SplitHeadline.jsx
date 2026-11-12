@@ -16,9 +16,9 @@ export const HEADLINE = {
   },
   ar: {
     dir: "rtl",
-    full: "", // TODO: الجملة كاملة
-    hero: { start: "", end: "" },
-    section: { start: "", end: "" },
+    full: "من ارتداء الألماس… إلى فهمه.",
+    hero: { start: "من ارتداء", end: "الألماس" },
+    section: { start: "إلى", end: "فهمه." },
   },
 };
 

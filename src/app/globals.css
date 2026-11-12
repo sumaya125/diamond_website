@@ -956,3 +956,74 @@ body {
 /* The sticky stage lives inside <body>. Nothing in this ancestor chain may
    grow a transform, filter, or overflow other than `visible`, or
    position: sticky silently stops working. */
+
+/* ══ Arabic ═══════════════════════════════════════════════════════════
+   Buda, Cormorant and Newsreader have no Arabic glyphs, and tracking
+   breaks the joins between Arabic letters. Every Arabic run gets the Kufi
+   face and no letter-spacing; the layout already uses logical properties,
+   so it mirrors on its own under dir="rtl". */
+:lang(ar) {
+  --font-arabic: var(--font-kufi), "Geeza Pro", Tahoma, sans-serif;
+  --font-display: var(--font-arabic);
+  --font-reader: var(--font-arabic);
+  --font-hero: var(--font-arabic);
+  --ls-font: var(--font-arabic);
+}
+
+:lang(ar),
+:lang(ar) * {
+  letter-spacing: normal !important;
+}
+
+:lang(ar) .hl {
+  line-height: 1.5;
+}
+
+:lang(ar) .ls-q,
+:lang(ar) .ls-s4-copy h2,
+:lang(ar) .ct-heading {
+  line-height: 1.45;
+}
+
+:lang(ar) .ls-a,
+:lang(ar) .ls-s4-copy p,
+:lang(ar) .ct-body {
+  line-height: 1.9;
+}
+
+/* Latin runs inside the Arabic page (phone numbers, handles, store names) */
+:lang(ar) [dir="ltr"],
+:lang(ar) .ls-stores span {
+  font-family: var(--font-buda), Georgia, serif;
+}
+
+/* ══ Language switch ══════════════════════════════════════════════════ */
+.lang-switch {
+  position: fixed;
+  top: 1.1rem;
+  inset-inline-end: 1.25rem;
+  z-index: 50;
+  padding: 0.35rem 0.9rem;
+  border-radius: 999px;
+  border: 1px solid rgba(242, 242, 240, 0.35);
+  background: rgba(0, 0, 0, 0.35);
+  color: #f2f2f0;
+  font-size: 0.85rem;
+  text-decoration: none;
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  transition: background-color 0.2s ease;
+}
+
+.lang-switch:lang(ar) {
+  font-family: var(--font-kufi), "Geeza Pro", Tahoma, sans-serif;
+}
+
+.lang-switch:lang(en) {
+  font-family: var(--font-buda), Georgia, serif;
+  letter-spacing: 0.06em !important;
+}
+
+.lang-switch:hover {
+  background: rgba(0, 0, 0, 0.6);
+}

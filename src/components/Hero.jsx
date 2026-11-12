@@ -214,7 +214,7 @@ function MobileAnnotation({ progress, item, still }) {
  * الخلفية تسوّد، ثم العقد ينزل من فوق ويستقر. مسرح sticky واحد — ما فيه
  * حدود بين بلوكين عشان ما يبان خط فاصل.
  */
-export default function Hero() {
+export default function Hero({ locale = "en" }) {
   const sectionRef = useRef(null);
   const canvasRef = useRef(null);
   const imagesRef = useRef([]);
@@ -318,9 +318,10 @@ export default function Hero() {
 
         {/* نص الهيرو: نصف الجملة الأول، على جنبَي الموديل.
             الجملة كاملة تنقرأ من <h1> المخفي تحت. */}
-        <h1 className="sr-only">{headlineCopy().full}</h1>
+        <h1 className="sr-only">{headlineCopy(locale).full}</h1>
         <SplitHeadline
           part="hero"
+          locale={locale}
           instant={reduced}
           innerStyle={
             reduced ? undefined : { opacity: wordsFade, y: wordsDrift }
